@@ -14,7 +14,9 @@ import roomescape.member.domain.Member;
 import roomescape.member.domain.MemberRepository;
 import roomescape.reservation.domain.Reservation;
 import roomescape.reservation.domain.ReservationRepository;
+import roomescape.reservation.domain.ReservationWaiting;
 import roomescape.reservation.domain.Status;
+import roomescape.reservation.domain.WaitingRankCalculator;
 import roomescape.reservation.dto.MemberReservationAddRequest;
 import roomescape.reservation.dto.MemberReservationStatusResponse;
 import roomescape.reservation.dto.ReservationResponse;
@@ -84,13 +86,28 @@ public class ReservationService {
     }
 
     private void findAllMembersWaitingReservation(List<MemberReservationStatusResponse> responses, Long memberId) {
-        reservationRepository.findAllReservationWaitingByMemberId(memberId)
-                .stream()
-                .map(MemberReservationStatusResponse::new)
-                .forEach(responses::add);
+        List<ReservationWaiting> reservationWaitings
+                = reservationRepository.findAllReservationWaitingByMemberId(memberId);
+
+        for (ReservationWaiting reservationWaiting : reservationWaitings) {
+            WaitingRankCalculator waitingRankCalculator
+                    = new WaitingRankCalculator(
+                    reservationRepository.findAllReservationWaitingByDateAndTimeAndTheme(reservationWaiting.getDate(),
+                            reservationWaiting.getTime().getId(),
+                            reservationWaiting.getTheme().getId()
+                    )
+            );
+
+            responses.add(
+                    new MemberReservationStatusResponse(reservationWaiting,
+                            waitingRankCalculator.calculateWaitingRank(reservationWaiting)
+                    )
+            );
+        }
     }
 
-    public ReservationResponse saveMemberReservation(Long memberId, MemberReservationAddRequest request, Status status) {
+    public ReservationResponse saveMemberReservation(Long memberId, MemberReservationAddRequest request,
+                                                     Status status) {
         if (status.isReserved()) {
             validateDuplicatedReservation(request);
         }
